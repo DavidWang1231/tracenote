@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Globe2,
   Library,
+  Languages,
   LoaderCircle,
   Menu,
   MessageSquareText,
@@ -49,6 +50,70 @@ type ChatMessage = {
   mode?: "ai" | "extractive";
 };
 
+type UiLanguage = "zh" | "en";
+type AnswerLanguage = "auto" | "zh" | "en";
+
+const COPY = {
+  zh: {
+    openLibrary: "打开资料库", viewSources: "查看来源", close: "关闭",
+    newProject: "新建研究项目", workspace: "研究工作区", allSources: "全部资料",
+    webSupplement: "联网补充", off: "关闭", currentProject: "当前项目",
+    projectName: "我的研究资料", noSources: "尚未添加资料", sourceCount: (n: number) => `${n} 份资料`,
+    strictMode: "严格资料模式", strictHint: "仅依据你选择的资料回答",
+    addSources: "添加资料", loadingLibrary: "正在打开资料库…", sourcesReady: "资料已就绪",
+    readyCopy: (selected: number, words: string) => `当前选中 ${selected} 份资料，共约 ${words} 字。我只会依据这些资料回答，并在每个关键结论后标记来源。`,
+    suggestions: ["总结所有资料的核心观点", "找出资料之间的矛盾", "提取关键数据与时间线"],
+    you: "你", assistant: "溯源助手", aiAnalysis: "AI 综合分析", localSummary: "本地提取摘要",
+    checking: "正在核对资料与引用…", askPlaceholder: "针对所选资料提问…", selectedSources: (n: number) => `${n} 份资料`,
+    newline: "Shift + Enter 换行", sourcesAndCitations: "资料与引用", sourceCheck: "来源检查",
+    searchSources: "搜索资料", projectSources: "本项目资料", selectedRatio: (a: number, b: number) => `${a}/${b} 已选择`,
+    currentCitation: "当前引用", citationProof: "此回答依据上方原文片段生成",
+    citationEmptyTitle: "引用会显示在这里", citationEmptyCopy: "提出问题后，点击回答中的来源编号即可检查原文。",
+    offlineNote: "联网搜索已关闭。系统不会把外部信息混入当前研究。",
+    emptyEyebrow: "从你的资料开始", emptyTitle: "把散落的信息，变成可追溯的结论",
+    emptyCopy: "上传资料后，我可以总结重点、对比多份文件，并让每个结论都回到原文。",
+    upload: "选择资料上传", uploading: "正在处理资料", examples: "或使用示例资料体验",
+    limits: "单个文件最大 20 MB · 默认不联网", interfaceLanguage: "界面语言",
+    answerLanguage: "回答语言", auto: "自动", chinese: "中文", english: "English",
+    added: (n: number) => `已添加 ${n} 份资料，正在建立摘要`, chooseSmall: "请选择 20 MB 以内的支持文件",
+    chooseOne: "请至少选择一份资料", summaryPrompt: "请总结这份资料的核心观点、关键数据和需要注意的限制。",
+    drop: "松开即可添加资料", deleteLabel: (name: string) => `删除 ${name}`,
+    selectLabel: (name: string, selected: boolean) => `${selected ? "取消选择" : "选择"} ${name}`,
+    libraryError: "无法读取资料库", uploadFail: (name: string) => `${name} 上传失败`, processFail: "资料处理失败",
+    deleteFail: "删除失败", analyzeFail: "分析失败", mainNav: "主导航", enabled: "已开启",
+    closeNotice: "关闭通知", send: "发送", pageLabel: (n: number) => `【第 ${n} 页】`, unsupported: (ext: string) => `暂不支持 ${ext} 格式`,
+  },
+  en: {
+    openLibrary: "Open library", viewSources: "View sources", close: "Close",
+    newProject: "New research project", workspace: "Research workspace", allSources: "All sources",
+    webSupplement: "Web supplement", off: "Off", currentProject: "Current project",
+    projectName: "My research library", noSources: "No sources yet", sourceCount: (n: number) => `${n} source${n === 1 ? "" : "s"}`,
+    strictMode: "Source-only mode", strictHint: "Answers only from selected sources",
+    addSources: "Add sources", loadingLibrary: "Opening your library…", sourcesReady: "Your sources are ready",
+    readyCopy: (selected: number, words: string) => `${selected} source${selected === 1 ? " is" : "s are"} selected, with about ${words} words. Every factual claim will point back to the source material.`,
+    suggestions: ["Summarize the core findings", "Find contradictions across sources", "Extract key data and a timeline"],
+    you: "You", assistant: "TraceNote", aiAnalysis: "AI synthesis", localSummary: "Extractive summary",
+    checking: "Checking evidence and citations…", askPlaceholder: "Ask a question about the selected sources…", selectedSources: (n: number) => `${n} source${n === 1 ? "" : "s"}`,
+    newline: "Shift + Enter for a new line", sourcesAndCitations: "Sources & citations", sourceCheck: "Evidence inspector",
+    searchSources: "Search sources", projectSources: "Project sources", selectedRatio: (a: number, b: number) => `${a}/${b} selected`,
+    currentCitation: "Current citation", citationProof: "This answer is grounded in the excerpt above",
+    citationEmptyTitle: "Citations will appear here", citationEmptyCopy: "Ask a question, then select a source tag to inspect the supporting excerpt.",
+    offlineNote: "Web search is off. External information will not be mixed into this research.",
+    emptyEyebrow: "Start with your sources", emptyTitle: "Turn scattered documents into verifiable insight",
+    emptyCopy: "Upload your material to summarize key points, compare sources, and trace every conclusion back to the original.",
+    upload: "Choose files", uploading: "Processing sources", examples: "Or explore with sample sources",
+    limits: "20 MB per file · Web search off by default", interfaceLanguage: "Interface language",
+    answerLanguage: "Answer language", auto: "Auto", chinese: "中文", english: "English",
+    added: (n: number) => `${n} source${n === 1 ? "" : "s"} added. Building a summary now.`, chooseSmall: "Choose a supported file under 20 MB",
+    chooseOne: "Select at least one source", summaryPrompt: "Summarize this source's main findings, key data, and important limitations.",
+    drop: "Drop to add sources", deleteLabel: (name: string) => `Delete ${name}`,
+    selectLabel: (name: string, selected: boolean) => `${selected ? "Deselect" : "Select"} ${name}`,
+    libraryError: "Could not open the source library", uploadFail: (name: string) => `${name} could not be uploaded`, processFail: "The source could not be processed",
+    deleteFail: "Could not delete this source", analyzeFail: "The analysis could not be completed", mainNav: "Main navigation", enabled: "Enabled",
+    closeNotice: "Dismiss notification", send: "Send", pageLabel: (n: number) => `[Page ${n}]`, unsupported: (ext: string) => `${ext} files are not supported yet`,
+  },
+} as const;
+
 const EXAMPLE_FILES = [
   {
     name: "2026-用户研究摘要.md",
@@ -60,7 +125,20 @@ const EXAMPLE_FILES = [
   },
 ];
 
+const EXAMPLE_FILES_EN = [
+  {
+    name: "2026-user-research-summary.md",
+    content: `# Research summary\n\nThis study included 18 independent researchers and knowledge workers. Participants read an average of 11 long documents per week. Seventy-two percent said the hardest part was not reading, but finding the original evidence behind a conclusion later.\n\n## Key findings\n\nMost participants used a mix of cloud drives, note-taking tools, and chat assistants. Thirteen participants explicitly asked for every summary to link back to the original text. Answers without a clear source were usually checked manually.\n\n## Product opportunity\n\nSource-only mode should be enabled by default. Claims should display a source tag, and selecting it should open the supporting excerpt. When evidence is insufficient, the product should say so instead of filling the gap with unverified information.`,
+  },
+  {
+    name: "product-scope-notes.txt",
+    content: `The first release only uses documents actively provided by the user and does not search the web by default. Initial formats include PDF, DOCX, TXT, Markdown, CSV, and JSON. The file-size limit is 20 MB.\n\nThe MVP focuses on three jobs: single-document summaries, cross-document questions, and citation inspection. Audio, video, presentation files, and advanced table extraction are planned for later releases.\n\nSuccess metrics include citation engagement, follow-up questions, and whether users complete the same research task in less time.`,
+  },
+];
+
 export default function Home() {
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>("zh");
+  const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage>("auto");
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
@@ -74,21 +152,39 @@ export default function Home() {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [mobileSources, setMobileSources] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const t = COPY[uiLanguage];
 
   useEffect(() => {
     void loadDocuments();
+    const savedUi = window.localStorage.getItem("tracenote-ui-language");
+    const savedAnswer = window.localStorage.getItem("tracenote-answer-language");
+    if (savedUi === "zh" || savedUi === "en") setUiLanguage(savedUi);
+    if (savedAnswer === "auto" || savedAnswer === "zh" || savedAnswer === "en") {
+      setAnswerLanguage(savedAnswer);
+    }
   }, []);
+
+  function changeUiLanguage(language: UiLanguage) {
+    setUiLanguage(language);
+    window.localStorage.setItem("tracenote-ui-language", language);
+    document.documentElement.lang = language === "zh" ? "zh-CN" : "en-CA";
+  }
+
+  function changeAnswerLanguage(language: AnswerLanguage) {
+    setAnswerLanguage(language);
+    window.localStorage.setItem("tracenote-answer-language", language);
+  }
 
   async function loadDocuments() {
     try {
       const response = await fetch("/api/documents");
       const data = (await response.json()) as { documents?: DocumentItem[]; error?: string };
-      if (!response.ok) throw new Error(data.error || "无法读取资料库");
+      if (!response.ok) throw new Error(data.error || t.libraryError);
       const next = data.documents ?? [];
       setDocuments(next);
       setSelectedIds((current) => (current.length ? current : next.map((item) => item.id)));
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "无法读取资料库");
+      setNotice(error instanceof Error ? error.message : t.libraryError);
     } finally {
       setLoading(false);
     }
@@ -97,7 +193,7 @@ export default function Home() {
   async function handleFiles(files: File[]) {
     const validFiles = files.filter((file) => file.size <= 20 * 1024 * 1024);
     if (!validFiles.length) {
-      setNotice("请选择 20 MB 以内的支持文件");
+      setNotice(t.chooseSmall);
       return;
     }
     setUploading(true);
@@ -106,24 +202,24 @@ export default function Home() {
 
     try {
       for (const file of validFiles) {
-        const text = await extractText(file);
+        const text = await extractText(file, uiLanguage);
         const form = new FormData();
         form.append("file", file);
         form.append("text", text);
         const response = await fetch("/api/documents", { method: "POST", body: form });
         const data = (await response.json()) as { document?: DocumentItem; error?: string };
-        if (!response.ok || !data.document) throw new Error(data.error || `${file.name} 上传失败`);
+        if (!response.ok || !data.document) throw new Error(data.error || t.uploadFail(file.name));
         uploaded.push(data.document);
       }
 
       setDocuments((current) => [...uploaded, ...current]);
       setSelectedIds((current) => Array.from(new Set([...current, ...uploaded.map((item) => item.id)])));
-      setNotice(`已添加 ${uploaded.length} 份资料，正在建立摘要`);
+      setNotice(t.added(uploaded.length));
       if (uploaded.length === 1) {
-        await askQuestion("请总结这份资料的核心观点、关键数据和需要注意的限制。", [uploaded[0].id], "summary");
+        await askQuestion(t.summaryPrompt, [uploaded[0].id], "summary");
       }
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "资料处理失败");
+      setNotice(error instanceof Error ? error.message : t.processFail);
     } finally {
       setUploading(false);
       if (fileInput.current) fileInput.current.value = "";
@@ -131,7 +227,8 @@ export default function Home() {
   }
 
   async function seedExamples() {
-    const files = EXAMPLE_FILES.map(
+    const examples = uiLanguage === "en" ? EXAMPLE_FILES_EN : EXAMPLE_FILES;
+    const files = examples.map(
       (example) => new File([example.content], example.name, { type: "text/plain" }),
     );
     await handleFiles(files);
@@ -142,12 +239,12 @@ export default function Home() {
       const response = await fetch(`/api/documents?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
-      if (!response.ok) throw new Error("删除失败");
+      if (!response.ok) throw new Error(t.deleteFail);
       setDocuments((current) => current.filter((item) => item.id !== id));
       setSelectedIds((current) => current.filter((item) => item !== id));
       if (selectedCitation?.documentId === id) setSelectedCitation(null);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "删除失败");
+      setNotice(error instanceof Error ? error.message : t.deleteFail);
     }
   }
 
@@ -160,7 +257,7 @@ export default function Home() {
     if (!clean || asking) return;
     const ids = overrideIds ?? selectedIds;
     if (!ids.length) {
-      setNotice("请至少选择一份资料");
+      setNotice(t.chooseOne);
       return;
     }
 
@@ -178,7 +275,13 @@ export default function Home() {
       const response = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: clean, documentIds: ids, mode }),
+        body: JSON.stringify({
+          question: clean,
+          documentIds: ids,
+          mode,
+          answerLanguage,
+          interfaceLanguage: uiLanguage,
+        }),
       });
       const data = (await response.json()) as {
         answer?: string;
@@ -186,7 +289,7 @@ export default function Home() {
         mode?: "ai" | "extractive";
         error?: string;
       };
-      if (!response.ok || !data.answer) throw new Error(data.error || "分析失败");
+      if (!response.ok || !data.answer) throw new Error(data.error || t.analyzeFail);
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         role: "assistant",
@@ -197,7 +300,7 @@ export default function Home() {
       setMessages((current) => [...current, assistantMessage]);
       if (data.citations?.[0]) setSelectedCitation(data.citations[0]);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "分析失败");
+      setNotice(error instanceof Error ? error.message : t.analyzeFail);
     } finally {
       setAsking(false);
     }
@@ -226,64 +329,64 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="mobile-header">
-        <button className="icon-button" onClick={() => setMobileSidebar(true)} aria-label="打开资料库">
+        <button className="icon-button" onClick={() => setMobileSidebar(true)} aria-label={t.openLibrary}>
           <Menu size={19} />
         </button>
-        <Brand compact />
-        <button className="icon-button" onClick={() => setMobileSources(true)} aria-label="查看来源">
+        <Brand compact language={uiLanguage} />
+        <button className="icon-button" onClick={() => setMobileSources(true)} aria-label={t.viewSources}>
           <BookOpen size={19} />
         </button>
       </header>
 
       <aside className={`sidebar ${mobileSidebar ? "mobile-open" : ""}`}>
         <div className="sidebar-top">
-          <Brand />
-          <button className="mobile-close" onClick={() => setMobileSidebar(false)} aria-label="关闭">
+          <Brand language={uiLanguage} />
+          <button className="mobile-close" onClick={() => setMobileSidebar(false)} aria-label={t.close}>
             <X size={18} />
           </button>
         </div>
 
         <button className="new-project-button">
           <Plus size={17} />
-          新建研究项目
+          {t.newProject}
         </button>
 
-        <nav className="sidebar-nav" aria-label="主导航">
+        <nav className="sidebar-nav" aria-label={t.mainNav}>
           <button className="nav-item active">
             <MessageSquareText size={17} />
-            研究工作区
+            {t.workspace}
           </button>
           <button className="nav-item">
             <Library size={17} />
-            全部资料
+            {t.allSources}
             <span>{documents.length}</span>
           </button>
           <button className="nav-item">
             <Globe2 size={17} />
-            联网补充
-            <em>关闭</em>
+            {t.webSupplement}
+            <em>{t.off}</em>
           </button>
         </nav>
 
         <div className="section-heading">
-          <span>当前项目</span>
+          <span>{t.currentProject}</span>
           <MoreHorizontal size={16} />
         </div>
         <div className="project-card">
           <div className="project-icon"><FolderOpen size={18} /></div>
           <div>
-            <strong>我的研究资料</strong>
-            <span>{documents.length ? `${documents.length} 份资料` : "尚未添加资料"}</span>
+            <strong>{t.projectName}</strong>
+            <span>{documents.length ? t.sourceCount(documents.length) : t.noSources}</span>
           </div>
         </div>
 
         <div className="privacy-card">
           <ShieldCheck size={18} />
           <div>
-            <strong>严格资料模式</strong>
-            <span>仅依据你选择的资料回答</span>
+            <strong>{t.strictMode}</strong>
+            <span>{t.strictHint}</span>
           </div>
-          <div className="status-dot" aria-label="已开启" />
+          <div className="status-dot" aria-label={t.enabled} />
         </div>
       </aside>
 
@@ -298,14 +401,19 @@ export default function Home() {
       >
         <div className="workspace-header">
           <div>
-            <p className="eyebrow">研究工作区</p>
-            <h1>我的研究资料</h1>
+            <p className="eyebrow">{t.workspace}</p>
+            <h1>{t.projectName}</h1>
           </div>
           <div className="workspace-actions">
-            <div className="mode-pill"><ShieldCheck size={15} /> 严格资料模式 <ChevronDown size={14} /></div>
+            <div className="mode-pill"><ShieldCheck size={15} /> {t.strictMode} <ChevronDown size={14} /></div>
+            <div className="language-switch" aria-label={t.interfaceLanguage}>
+              <Languages size={15} />
+              <button className={uiLanguage === "zh" ? "active" : ""} onClick={() => changeUiLanguage("zh")}>中</button>
+              <button className={uiLanguage === "en" ? "active" : ""} onClick={() => changeUiLanguage("en")}>EN</button>
+            </div>
             <label className="upload-button">
               <Upload size={16} />
-              添加资料
+              {t.addSources}
               <input
                 ref={fileInput}
                 type="file"
@@ -321,15 +429,16 @@ export default function Home() {
           <div className="notice" role="status">
             <Sparkles size={15} />
             <span>{notice}</span>
-            <button onClick={() => setNotice(null)} aria-label="关闭通知"><X size={14} /></button>
+            <button onClick={() => setNotice(null)} aria-label={t.closeNotice}><X size={14} /></button>
           </div>
         )}
 
         <div className="conversation">
           {loading ? (
-            <div className="loading-state"><LoaderCircle className="spin" size={24} /> 正在打开资料库…</div>
+            <div className="loading-state"><LoaderCircle className="spin" size={24} /> {t.loadingLibrary}</div>
           ) : documents.length === 0 ? (
             <EmptyState
+              copy={t}
               uploading={uploading}
               onUpload={() => fileInput.current?.click()}
               onExamples={() => void seedExamples()}
@@ -339,13 +448,12 @@ export default function Home() {
               <div className="welcome-block">
                 <div className="assistant-mark"><Sparkles size={19} /></div>
                 <div>
-                  <h2>资料已就绪</h2>
+                  <h2>{t.sourcesReady}</h2>
                   <p>
-                    当前选中 {selectedDocuments.length} 份资料，共约 {formatNumber(totalWords)} 字。
-                    我只会依据这些资料回答，并在每个关键结论后标记来源。
+                    {t.readyCopy(selectedDocuments.length, formatNumber(totalWords, uiLanguage))}
                   </p>
                   <div className="suggestion-row">
-                    {["总结所有资料的核心观点", "找出资料之间的矛盾", "提取关键数据与时间线"].map((item) => (
+                    {t.suggestions.map((item) => (
                       <button key={item} onClick={() => void askQuestion(item)}>{item}</button>
                     ))}
                   </div>
@@ -357,9 +465,9 @@ export default function Home() {
                   {message.role === "assistant" && <div className="assistant-mark small"><Sparkles size={15} /></div>}
                   <div className="message-body">
                     <div className="message-meta">
-                      <strong>{message.role === "user" ? "你" : "溯源助手"}</strong>
+                      <strong>{message.role === "user" ? t.you : t.assistant}</strong>
                       {message.mode && (
-                        <span>{message.mode === "ai" ? "AI 综合分析" : "本地提取摘要"}</span>
+                        <span>{message.mode === "ai" ? t.aiAnalysis : t.localSummary}</span>
                       )}
                     </div>
                     <div className="message-content">
@@ -390,7 +498,7 @@ export default function Home() {
               {asking && (
                 <div className="thinking-row">
                   <div className="assistant-mark small"><LoaderCircle className="spin" size={15} /></div>
-                  <span>正在核对资料与引用…</span>
+                  <span>{t.checking}</span>
                 </div>
               )}
             </>
@@ -408,41 +516,49 @@ export default function Home() {
                   if (question.trim()) void askQuestion(question);
                 }
               }}
-              placeholder="针对所选资料提问…"
+              placeholder={t.askPlaceholder}
               rows={2}
             />
             <div className="composer-footer">
               <button type="button" className="context-button">
-                <FileText size={14} /> {selectedIds.length} 份资料
+                <FileText size={14} /> {t.selectedSources(selectedIds.length)}
               </button>
-              <span>Shift + Enter 换行</span>
-              <button className="send-button" type="submit" disabled={!question.trim() || asking} aria-label="发送">
+              <label className="answer-language-select">
+                <span>{t.answerLanguage}</span>
+                <select value={answerLanguage} onChange={(event) => changeAnswerLanguage(event.target.value as AnswerLanguage)}>
+                  <option value="auto">{t.auto}</option>
+                  <option value="zh">{t.chinese}</option>
+                  <option value="en">{t.english}</option>
+                </select>
+              </label>
+              <span>{t.newline}</span>
+              <button className="send-button" type="submit" disabled={!question.trim() || asking} aria-label={t.send}>
                 {asking ? <LoaderCircle className="spin" size={17} /> : <ArrowUp size={17} />}
               </button>
             </div>
           </form>
         )}
 
-        {dragging && <div className="drop-overlay"><Upload size={28} /> 松开即可添加资料</div>}
+        {dragging && <div className="drop-overlay"><Upload size={28} /> {t.drop}</div>}
       </section>
 
       <aside className={`sources-panel ${mobileSources ? "mobile-open" : ""}`}>
         <div className="sources-header">
           <div>
-            <p className="eyebrow">资料与引用</p>
-            <h2>来源检查</h2>
+            <p className="eyebrow">{t.sourcesAndCitations}</p>
+            <h2>{t.sourceCheck}</h2>
           </div>
-          <button className="mobile-close" onClick={() => setMobileSources(false)} aria-label="关闭">
+          <button className="mobile-close" onClick={() => setMobileSources(false)} aria-label={t.close}>
             <X size={18} />
           </button>
         </div>
 
-        <div className="search-box"><Search size={15} /><input placeholder="搜索资料" /></div>
+        <div className="search-box"><Search size={15} /><input placeholder={t.searchSources} /></div>
 
         <div className="documents-list">
           <div className="list-heading">
-            <span>本项目资料</span>
-            <span>{selectedIds.length}/{documents.length} 已选择</span>
+            <span>{t.projectSources}</span>
+            <span>{t.selectedRatio(selectedIds.length, documents.length)}</span>
           </div>
           {documents.map((document) => {
             const selected = selectedIds.includes(document.id);
@@ -457,16 +573,16 @@ export default function Home() {
                         : [...current, document.id],
                     )
                   }
-                  aria-label={selected ? `取消选择 ${document.name}` : `选择 ${document.name}`}
+                  aria-label={t.selectLabel(document.name, selected)}
                 >
                   {selected && <Check size={12} />}
                 </button>
                 <div className="file-icon"><File size={16} /></div>
                 <div className="document-info">
                   <strong title={document.name}>{document.name}</strong>
-                  <span>{formatFileSize(document.size)} · {formatNumber(document.wordCount)} 字</span>
+                  <span>{formatFileSize(document.size)} · {formatNumber(document.wordCount, uiLanguage)} {uiLanguage === "zh" ? "字" : "words"}</span>
                 </div>
-                <button className="delete-button" onClick={() => void deleteDocument(document.id)} aria-label={`删除 ${document.name}`}>
+                <button className="delete-button" onClick={() => void deleteDocument(document.id)} aria-label={t.deleteLabel(document.name)}>
                   <Trash2 size={14} />
                 </button>
               </div>
@@ -477,43 +593,45 @@ export default function Home() {
         <div className="citation-preview">
           {selectedCitation ? (
             <>
-              <div className="citation-label"><span>{selectedCitation.sourceId}</span> 当前引用</div>
+              <div className="citation-label"><span>{selectedCitation.sourceId}</span> {t.currentCitation}</div>
               <h3>{selectedCitation.documentName}</h3>
               <blockquote>{selectedCitation.excerpt}</blockquote>
-              <p><ShieldCheck size={14} /> 此回答依据上方原文片段生成</p>
+              <p><ShieldCheck size={14} /> {t.citationProof}</p>
             </>
           ) : (
             <div className="citation-empty">
               <BookOpen size={22} />
-              <strong>引用会显示在这里</strong>
-              <span>提出问题后，点击回答中的来源编号即可检查原文。</span>
+              <strong>{t.citationEmptyTitle}</strong>
+              <span>{t.citationEmptyCopy}</span>
             </div>
           )}
         </div>
 
         <div className="scope-note">
           <ShieldCheck size={15} />
-          <span>联网搜索已关闭。系统不会把外部信息混入当前研究。</span>
+          <span>{t.offlineNote}</span>
         </div>
       </aside>
     </main>
   );
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand({ compact = false, language }: { compact?: boolean; language: UiLanguage }) {
   return (
     <div className={`brand ${compact ? "compact" : ""}`}>
       <div className="brand-mark"><BookOpen size={18} /></div>
-      <div><strong>溯源</strong>{!compact && <span>TraceNote</span>}</div>
+      <div><strong>{language === "zh" ? "溯源" : "TraceNote"}</strong>{!compact && <span>{language === "zh" ? "TraceNote" : "Research with evidence"}</span>}</div>
     </div>
   );
 }
 
 function EmptyState({
+  copy,
   uploading,
   onUpload,
   onExamples,
 }: {
+  copy: (typeof COPY)[UiLanguage];
   uploading: boolean;
   onUpload: () => void;
   onExamples: () => void;
@@ -526,22 +644,22 @@ function EmptyState({
         <div className="spark spark-one" />
         <div className="spark spark-two" />
       </div>
-      <p className="eyebrow">从你的资料开始</p>
-      <h2>把散落的信息，变成可追溯的结论</h2>
+      <p className="eyebrow">{copy.emptyEyebrow}</p>
+      <h2>{copy.emptyTitle}</h2>
       <p className="empty-copy">
-        上传资料后，我可以总结重点、对比多份文件，并让每个结论都回到原文。
+        {copy.emptyCopy}
       </p>
       <button className="primary-action" onClick={onUpload} disabled={uploading}>
         {uploading ? <LoaderCircle className="spin" size={17} /> : <Upload size={17} />}
-        {uploading ? "正在处理资料" : "选择资料上传"}
+        {uploading ? copy.uploading : copy.upload}
       </button>
       <button className="example-action" onClick={onExamples} disabled={uploading}>
-        或使用示例资料体验
+        {copy.examples}
       </button>
       <div className="supported-formats">
         <span>PDF</span><span>DOCX</span><span>TXT</span><span>MD</span><span>CSV</span><span>JSON</span>
       </div>
-      <small>单个文件最大 20 MB · 默认不联网</small>
+      <small>{copy.limits}</small>
     </div>
   );
 }
@@ -565,7 +683,8 @@ function renderMessage(message: ChatMessage, onCitation: (citation: Citation) =>
   ));
 }
 
-async function extractText(file: File): Promise<string> {
+async function extractText(file: File, language: UiLanguage): Promise<string> {
+  const copy = COPY[language];
   const extension = file.name.split(".").pop()?.toLowerCase();
   if (["txt", "md", "markdown", "csv", "json"].includes(extension ?? "")) {
     return file.text();
@@ -590,11 +709,11 @@ async function extractText(file: File): Promise<string> {
         .map((item) => ("str" in item ? item.str : ""))
         .join(" ")
         .trim();
-      pages.push(`【第 ${pageNumber} 页】\n${text}`);
+      pages.push(`${copy.pageLabel(pageNumber)}\n${text}`);
     }
     return pages.join("\n\n");
   }
-  throw new Error(`暂不支持 ${extension?.toUpperCase() || "该"} 格式`);
+  throw new Error(copy.unsupported(extension?.toUpperCase() || (language === "zh" ? "该" : "this")));
 }
 
 function formatFileSize(bytes: number) {
@@ -603,6 +722,8 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-function formatNumber(value: number) {
-  return new Intl.NumberFormat("zh-CN", { notation: value > 9999 ? "compact" : "standard" }).format(value);
+function formatNumber(value: number, language: UiLanguage) {
+  return new Intl.NumberFormat(language === "zh" ? "zh-CN" : "en-CA", {
+    notation: value > 9999 ? "compact" : "standard",
+  }).format(value);
 }
