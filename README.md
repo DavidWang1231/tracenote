@@ -2,7 +2,7 @@
 
 TraceNote is an evidence-first document research workspace. It summarizes and compares user-provided sources, answers questions across documents, and keeps every factual claim connected to an inspectable citation.
 
-[Explore the privacy-safe public demo](https://tracenote-evidence-demo.wangjiacheng1231.chatgpt.site)
+[Explore the privacy-safe public demo](https://davidwang1231.github.io/tracenote-showcase/)
 
 ![TraceNote social preview](public/og.png)
 
