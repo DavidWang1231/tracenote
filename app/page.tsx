@@ -53,6 +53,26 @@ type ChatMessage = {
 type UiLanguage = "zh" | "en";
 type AnswerLanguage = "auto" | "zh" | "en";
 
+type PdfJsLibrary = {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (options: { data: Uint8Array; isEvalSupported: boolean }) => {
+    promise: Promise<{
+      numPages: number;
+      getPage: (pageNumber: number) => Promise<{
+        getTextContent: () => Promise<{ items: Array<{ str?: string }> }>;
+        cleanup: () => void;
+      }>;
+    }>;
+    destroy: () => Promise<void>;
+  };
+};
+
+declare global {
+  interface Window {
+    pdfjsLib?: PdfJsLibrary;
+  }
+}
+
 const COPY = {
   zh: {
     openLibrary: "打开资料库", viewSources: "查看来源", close: "关闭",
@@ -152,6 +172,7 @@ export default function Home() {
   const [mobileSidebar, setMobileSidebar] = useState(false);
   const [mobileSources, setMobileSources] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const sourceSearch = useRef<HTMLInputElement>(null);
   const t = COPY[uiLanguage];
 
   useEffect(() => {
@@ -311,6 +332,12 @@ export default function Home() {
     void askQuestion(question);
   }
 
+  function openSources() {
+    setMobileSidebar(false);
+    setMobileSources(true);
+    window.setTimeout(() => sourceSearch.current?.focus(), 260);
+  }
+
   function onDrop(event: DragEvent) {
     event.preventDefault();
     setDragging(false);
@@ -356,7 +383,7 @@ export default function Home() {
             <MessageSquareText size={17} />
             {t.workspace}
           </button>
-          <button className="nav-item">
+          <button className="nav-item" onClick={openSources}>
             <Library size={17} />
             {t.allSources}
             <span>{documents.length}</span>
@@ -520,7 +547,7 @@ export default function Home() {
               rows={2}
             />
             <div className="composer-footer">
-              <button type="button" className="context-button">
+              <button type="button" className="context-button" onClick={openSources}>
                 <FileText size={14} /> {t.selectedSources(selectedIds.length)}
               </button>
               <label className="answer-language-select">
@@ -553,7 +580,7 @@ export default function Home() {
           </button>
         </div>
 
-        <div className="search-box"><Search size={15} /><input placeholder={t.searchSources} /></div>
+        <div className="search-box"><Search size={15} /><input ref={sourceSearch} placeholder={t.searchSources} /></div>
 
         <div className="documents-list">
           <div className="list-heading">
@@ -696,16 +723,17 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
   }
   if (extension === "pdf") {
     try {
-      // PDF.js' default build targets the newest browsers and uses APIs that
-      // older Safari releases do not provide. The official legacy build ships
-      // the required compatibility layer while keeping the same parsing API.
-      // Load its worker handler on the main thread as well: this avoids Safari
-      // failures when a module Worker is blocked or cannot initialize.
-      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      const pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
-      (globalThis as typeof globalThis & { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
+      // PDF.js 4+ ships its worker as an ES module, which still fails in some
+      // Safari configurations. Our build step bundles the current legacy
+      // parser and worker as classic same-origin scripts, avoiding that path
+      // without pinning the application to an outdated PDF.js release.
+      await loadClassicScript("/pdfjs/pdf.min.js", "pdfjsLib");
+      const pdfjs = window.pdfjsLib;
+      if (!pdfjs) throw new Error("PDF parser did not initialize");
+      pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.js";
       const loadingTask = pdfjs.getDocument({
         data: new Uint8Array(await file.arrayBuffer()),
+        isEvalSupported: false,
       });
       const pdf = await loadingTask.promise;
       const pages: string[] = [];
@@ -748,6 +776,35 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
     }
   }
   throw new Error(copy.unsupported(extension?.toUpperCase() || (language === "zh" ? "该" : "this")));
+}
+
+let pdfScriptPromise: Promise<void> | null = null;
+
+function loadClassicScript(src: string, globalName: "pdfjsLib"): Promise<void> {
+  if (window[globalName]) return Promise.resolve();
+  if (pdfScriptPromise) return pdfScriptPromise;
+
+  pdfScriptPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[data-tracenote-pdfjs="${src}"]`);
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("PDF parser script failed to load")), { once: true });
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.tracenotePdfjs = src;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("PDF parser script failed to load"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    pdfScriptPromise = null;
+    throw error;
+  });
+
+  return pdfScriptPromise;
 }
 
 function formatFileSize(bytes: number) {
