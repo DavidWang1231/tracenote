@@ -699,14 +699,15 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
       // PDF.js' default build targets the newest browsers and uses APIs that
       // older Safari releases do not provide. The official legacy build ships
       // the required compatibility layer while keeping the same parsing API.
+      // Load its worker handler on the main thread as well: this avoids Safari
+      // failures when a module Worker is blocked or cannot initialize.
       const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
-        import.meta.url,
-      ).toString();
-      const pdf = await pdfjs.getDocument({
+      const pdfjsWorker = await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+      (globalThis as typeof globalThis & { pdfjsWorker?: unknown }).pdfjsWorker = pdfjsWorker;
+      const loadingTask = pdfjs.getDocument({
         data: new Uint8Array(await file.arrayBuffer()),
-      }).promise;
+      });
+      const pdf = await loadingTask.promise;
       const pages: string[] = [];
 
       try {
@@ -721,7 +722,7 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
           page.cleanup();
         }
       } finally {
-        await pdf.destroy();
+        await loadingTask.destroy();
       }
 
       const extracted = pages.join("\n\n").trim();
@@ -737,10 +738,11 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
       if (error instanceof Error && /没有可提取|no extractable text/i.test(error.message)) {
         throw error;
       }
+      const detail = error instanceof Error ? error.message : String(error);
       throw new Error(
         language === "zh"
-          ? "Safari 无法读取这份 PDF。请确认文件没有加密或损坏，然后重试。"
-          : "Safari could not read this PDF. Make sure it is not encrypted or damaged, then try again.",
+          ? `Safari 无法读取 PDF。技术信息：${detail.slice(0, 180)}`
+          : `Safari could not read the PDF. Technical detail: ${detail.slice(0, 180)}`,
         { cause: error },
       );
     }
