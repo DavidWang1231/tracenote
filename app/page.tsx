@@ -695,23 +695,55 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
     return result.value;
   }
   if (extension === "pdf") {
-    const pdfjs = await import("pdfjs-dist");
-    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-      "pdfjs-dist/build/pdf.worker.min.mjs",
-      import.meta.url,
-    ).toString();
-    const pdf = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
-    const pages: string[] = [];
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const text = content.items
-        .map((item) => ("str" in item ? item.str : ""))
-        .join(" ")
-        .trim();
-      pages.push(`${copy.pageLabel(pageNumber)}\n${text}`);
+    try {
+      // PDF.js' default build targets the newest browsers and uses APIs that
+      // older Safari releases do not provide. The official legacy build ships
+      // the required compatibility layer while keeping the same parsing API.
+      const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+      const pdf = await pdfjs.getDocument({
+        data: new Uint8Array(await file.arrayBuffer()),
+      }).promise;
+      const pages: string[] = [];
+
+      try {
+        for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+          const page = await pdf.getPage(pageNumber);
+          const content = await page.getTextContent();
+          const text = content.items
+            .map((item) => ("str" in item ? item.str : ""))
+            .join(" ")
+            .trim();
+          pages.push(`${copy.pageLabel(pageNumber)}\n${text}`);
+          page.cleanup();
+        }
+      } finally {
+        await pdf.destroy();
+      }
+
+      const extracted = pages.join("\n\n").trim();
+      if (!extracted) {
+        throw new Error(
+          language === "zh"
+            ? "这份 PDF 没有可提取的文字；如果它是扫描件，需要先进行 OCR。"
+            : "This PDF has no extractable text. Scanned documents need OCR first.",
+        );
+      }
+      return extracted;
+    } catch (error) {
+      if (error instanceof Error && /没有可提取|no extractable text/i.test(error.message)) {
+        throw error;
+      }
+      throw new Error(
+        language === "zh"
+          ? "Safari 无法读取这份 PDF。请确认文件没有加密或损坏，然后重试。"
+          : "Safari could not read this PDF. Make sure it is not encrypted or damaged, then try again.",
+        { cause: error },
+      );
     }
-    return pages.join("\n\n");
   }
   throw new Error(copy.unsupported(extension?.toUpperCase() || (language === "zh" ? "该" : "this")));
 }
