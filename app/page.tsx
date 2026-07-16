@@ -54,6 +54,7 @@ type UiLanguage = "zh" | "en";
 type AnswerLanguage = "auto" | "zh" | "en";
 
 type PdfJsLibrary = {
+  version: string;
   GlobalWorkerOptions: { workerSrc: string };
   getDocument: (options: { data: Uint8Array; isEvalSupported: boolean }) => {
     promise: Promise<{
@@ -67,9 +68,16 @@ type PdfJsLibrary = {
   };
 };
 
+type PdfJsWorkerLibrary = {
+  WorkerMessageHandler: unknown;
+};
+
+const PDFJS_VERSION = "4.10.38";
+
 declare global {
   interface Window {
     pdfjsLib?: PdfJsLibrary;
+    pdfjsWorker?: PdfJsWorkerLibrary;
   }
 }
 
@@ -723,18 +731,33 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
   }
   if (extension === "pdf") {
     try {
-      // PDF.js 4+ ships its worker as an ES module, which still fails in some
-      // Safari configurations. Our build step bundles the current legacy
-      // parser and worker as classic same-origin scripts, avoiding that path
-      // without pinning the application to an outdated PDF.js release.
-      await loadClassicScript("/pdfjs/pdf.min.js", "pdfjsLib");
+      // Use the security-patched PDF.js 4.x line, bundled for Safari 14.1 as
+      // classic same-origin scripts. The versioned URLs prevent Safari from
+      // reusing an incompatible parser cached by an earlier deployment.
+      await loadClassicScript(`/pdfjs/pdf.min.js?v=${PDFJS_VERSION}`, "pdfjsLib", PDFJS_VERSION);
       const pdfjs = window.pdfjsLib;
       if (!pdfjs) throw new Error("PDF parser did not initialize");
-      pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.js";
-      const loadingTask = pdfjs.getDocument({
-        data: new Uint8Array(await file.arrayBuffer()),
-        isEvalSupported: false,
-      });
+      const workerSrc = `/pdfjs/pdf.worker.min.js?v=${PDFJS_VERSION}`;
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      const data = new Uint8Array(await file.arrayBuffer());
+      let loadingTask: ReturnType<PdfJsLibrary["getDocument"]>;
+
+      if (isSafariBrowser()) {
+        // Safari has had several Worker regressions across PDF.js releases.
+        // Preload the worker handler in the page, then make PDF.js select its
+        // built-in fake-worker path. Other browsers keep the real Worker.
+        await loadPdfWorkerScript(workerSrc);
+        const workerHost = window as unknown as { Worker?: typeof Worker };
+        const nativeWorker = workerHost.Worker;
+        try {
+          workerHost.Worker = undefined;
+          loadingTask = pdfjs.getDocument({ data, isEvalSupported: false });
+        } finally {
+          workerHost.Worker = nativeWorker;
+        }
+      } else {
+        loadingTask = pdfjs.getDocument({ data, isEvalSupported: false });
+      }
       const pdf = await loadingTask.promise;
       const pages: string[] = [];
 
@@ -766,11 +789,13 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
       if (error instanceof Error && /没有可提取|no extractable text/i.test(error.message)) {
         throw error;
       }
-      const detail = error instanceof Error ? error.message : String(error);
+      const detail = error instanceof Error
+        ? [error.message, error.stack].filter(Boolean).join(" | ").replace(/\s+/g, " ")
+        : String(error);
       throw new Error(
         language === "zh"
-          ? `Safari 无法读取 PDF。技术信息：${detail.slice(0, 180)}`
-          : `Safari could not read the PDF. Technical detail: ${detail.slice(0, 180)}`,
+          ? `Safari 无法读取 PDF。技术信息：${detail.slice(0, 420)}`
+          : `Safari could not read the PDF. Technical detail: ${detail.slice(0, 420)}`,
         { cause: error },
       );
     }
@@ -779,15 +804,23 @@ async function extractText(file: File, language: UiLanguage): Promise<string> {
 }
 
 let pdfScriptPromise: Promise<void> | null = null;
+let pdfScriptVersion: string | null = null;
+let pdfWorkerScriptPromise: Promise<void> | null = null;
 
-function loadClassicScript(src: string, globalName: "pdfjsLib"): Promise<void> {
-  if (window[globalName]) return Promise.resolve();
-  if (pdfScriptPromise) return pdfScriptPromise;
+function loadClassicScript(src: string, globalName: "pdfjsLib", expectedVersion: string): Promise<void> {
+  if (window[globalName]?.version === expectedVersion) return Promise.resolve();
+  if (window[globalName]) window[globalName] = undefined;
+  if (pdfScriptPromise && pdfScriptVersion === expectedVersion) return pdfScriptPromise;
+  pdfScriptPromise = null;
+  pdfScriptVersion = expectedVersion;
 
   pdfScriptPromise = new Promise((resolve, reject) => {
     const existing = document.querySelector<HTMLScriptElement>(`script[data-tracenote-pdfjs="${src}"]`);
     if (existing) {
-      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("load", () => {
+        if (window[globalName]?.version === expectedVersion) resolve();
+        else reject(new Error(`PDF parser version mismatch: expected ${expectedVersion}`));
+      }, { once: true });
       existing.addEventListener("error", () => reject(new Error("PDF parser script failed to load")), { once: true });
       return;
     }
@@ -796,15 +829,47 @@ function loadClassicScript(src: string, globalName: "pdfjsLib"): Promise<void> {
     script.src = src;
     script.async = true;
     script.dataset.tracenotePdfjs = src;
-    script.onload = () => resolve();
+    script.onload = () => {
+      if (window[globalName]?.version === expectedVersion) resolve();
+      else reject(new Error(`PDF parser version mismatch: expected ${expectedVersion}`));
+    };
     script.onerror = () => reject(new Error("PDF parser script failed to load"));
     document.head.appendChild(script);
   }).catch((error) => {
     pdfScriptPromise = null;
+    pdfScriptVersion = null;
     throw error;
   });
 
   return pdfScriptPromise;
+}
+
+function loadPdfWorkerScript(src: string): Promise<void> {
+  if (window.pdfjsWorker?.WorkerMessageHandler) return Promise.resolve();
+  if (pdfWorkerScriptPromise) return pdfWorkerScriptPromise;
+
+  pdfWorkerScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.tracenotePdfjsWorker = src;
+    script.onload = () => {
+      if (window.pdfjsWorker?.WorkerMessageHandler) resolve();
+      else reject(new Error("PDF worker handler did not initialize"));
+    };
+    script.onerror = () => reject(new Error("PDF worker handler failed to load"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    pdfWorkerScriptPromise = null;
+    throw error;
+  });
+
+  return pdfWorkerScriptPromise;
+}
+
+function isSafariBrowser() {
+  const userAgent = navigator.userAgent;
+  return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Edg/i.test(userAgent);
 }
 
 function formatFileSize(bytes: number) {

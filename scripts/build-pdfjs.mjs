@@ -9,7 +9,7 @@ const shared = {
   format: "iife",
   minify: true,
   platform: "browser",
-  target: ["safari16.4"],
+  target: ["safari14.1"],
 };
 
 await Promise.all([
@@ -39,4 +39,4 @@ await Promise.all([
   }),
 ]);
 
-await writeFile(new URL("VERSION", outputDirectory), "pdfjs-dist 6.1.200\n");
+await writeFile(new URL("VERSION", outputDirectory), "pdfjs-dist 4.10.38\n");

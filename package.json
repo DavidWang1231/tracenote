@@ -34,7 +34,7 @@
     "esbuild": "0.28.0",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.6",
-    "pdfjs-dist": "6.1.200",
+    "pdfjs-dist": "4.10.38",
     "react-server-dom-webpack": "19.2.6",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
