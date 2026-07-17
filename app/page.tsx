@@ -203,6 +203,7 @@ export default function Home() {
   const [mobileSources, setMobileSources] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const sourceSearch = useRef<HTMLInputElement>(null);
+  const conversation = useRef<HTMLDivElement>(null);
   const t = COPY[uiLanguage];
 
   useEffect(() => {
@@ -224,6 +225,15 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(restorePreferences);
   }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (conversation.current) {
+        conversation.current.scrollTop = conversation.current.scrollHeight;
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [asking, messages]);
 
   useEffect(() => {
     if (!mobileSources && !scopeMenuOpen) return;
@@ -584,7 +594,7 @@ export default function Home() {
           </div>
         )}
 
-        <div className="conversation">
+        <div ref={conversation} className="conversation" data-testid="conversation-scroll">
           {loading ? (
             <div className="loading-state"><LoaderCircle className="spin" size={24} /> {t.loadingLibrary}</div>
           ) : documents.length === 0 ? (

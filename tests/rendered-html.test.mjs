@@ -40,3 +40,17 @@ test("ships Safari-compatible PDF.js assets", async () => {
     access(new URL("../public/pdfjs/pdf.worker.min.js", import.meta.url)),
   ]);
 });
+
+test("keeps the workspace scrollable in short and touch viewports", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(styles, /height: 100dvh/);
+  assert.match(styles, /\.conversation[\s\S]*overflow-y: auto/);
+  assert.match(styles, /-webkit-overflow-scrolling: touch/);
+  assert.match(styles, /touch-action: pan-y/);
+  assert.match(page, /conversation\.current\.scrollTop = conversation\.current\.scrollHeight/);
+  assert.match(page, /data-testid="conversation-scroll"/);
+});
