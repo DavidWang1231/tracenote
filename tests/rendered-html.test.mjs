@@ -1,87 +1,60 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
-
-async function render() {
-  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
-  const { default: worker } = await import(workerUrl.href);
-
-  return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
-  );
-}
-
-test("server-renders the starter loading skeleton", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
-
-  const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Codex is working/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(html, /Codex is building the first version/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
-});
-
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
+test("configures the TraceNote research workspace", async () => {
+  const [page, layout] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
+    access(new URL("../dist/server/index.js", import.meta.url)),
   ]);
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
+  assert.match(layout, /title: "溯源 · 资料研究助手"/);
+  assert.match(page, /严格资料模式/);
+  assert.match(page, /公开资料补充/);
+  assert.match(page, /免费 · 仅依据所选资料回答/);
+  assert.doesNotMatch(page, /codex-preview|Your site is taking shape|Codex is working/i);
+});
 
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
-  );
+test("keeps source-only mode free and labels public web results", async () => {
+  const [page, askRoute] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/ask/route.ts", import.meta.url), "utf8"),
+  ]);
 
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
+  assert.match(page, /type ResearchScope = "sources" \| "web"/);
+  assert.match(page, /tracenote-research-scope/);
+  assert.match(page, /不消耗 AI 额度/);
+  assert.match(page, /资料 \+ Wikipedia/);
+  assert.match(page, /上传文件不会发送/);
+  assert.match(askRoute, /webSupplement\?: boolean/);
+  assert.match(askRoute, /w\/rest\.php\/v1\/search\/page/);
+  assert.match(askRoute, /sourceId: `W\$\{index \+ 1\}`/);
+  assert.match(askRoute, /kind: "web" as const/);
+  assert.match(askRoute, /value\.length > 8/);
+  assert.match(askRoute, /allDocuments\.filter\(\(document\) => selectedIds\.has\(document\.id\)\)/);
+  assert.match(askRoute, /expandQueryTerms/);
+  assert.match(askRoute, /为了避免编造，下面列出最接近的原文片段/);
+  assert.doesNotMatch(askRoute, /ranked\.filter\(\(item\) => item\.score > 0\)\)\.slice/);
+});
 
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+test("ships Safari-compatible PDF.js assets", async () => {
+  await Promise.all([
+    access(new URL("../public/pdfjs/pdf.min.js", import.meta.url)),
+    access(new URL("../public/pdfjs/pdf.worker.min.js", import.meta.url)),
+  ]);
+});
+
+test("keeps the workspace scrollable in short and touch viewports", async () => {
+  const [page, styles] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(styles, /height: 100dvh/);
+  assert.match(styles, /\.conversation[\s\S]*overflow-y: auto/);
+  assert.match(styles, /-webkit-overflow-scrolling: touch/);
+  assert.match(styles, /touch-action: pan-y/);
+  assert.match(page, /conversation\.current\.scrollTop = conversation\.current\.scrollHeight/);
+  assert.match(page, /data-testid="conversation-scroll"/);
 });
