@@ -42,16 +42,15 @@ export async function POST(request: Request) {
     }
 
     const db = await ensureDatabase();
-    let sql =
+    const sql =
       "SELECT id, name, mime_type, size, content, storage_key, word_count, status, created_at FROM documents";
     const ids = Array.isArray(body.documentIds) ? body.documentIds.filter(Boolean) : [];
-    let query = db.prepare(sql);
-    if (ids.length) {
-      sql += ` WHERE id IN (${ids.map(() => "?").join(",")})`;
-      query = db.prepare(sql).bind(...ids);
-    }
-    const result = await query.all();
-    const documents = result.results.map((row) => mapDocument(row));
+    const result = await db.prepare(sql).all();
+    const allDocuments = result.results.map((row) => mapDocument(row));
+    const selectedIds = new Set(ids);
+    const documents = ids.length
+      ? allDocuments.filter((document) => selectedIds.has(document.id))
+      : allDocuments;
     if (!documents.length) {
       return NextResponse.json({ error: "请先添加至少一份资料" }, { status: 400 });
     }
@@ -64,8 +63,10 @@ export async function POST(request: Request) {
     );
     const isSummary =
       body.mode === "summary" ||
-      /总结|概括|核心|要点|summary|summarize|key findings/i.test(question);
-    const evidence = (isSummary ? ranked : ranked.filter((item) => item.score > 0)).slice(0, 6);
+      /总结|概括|核心|要点|介绍|简历|履历|这份资料|这个人|summary|summarize|key findings|overview|profile|resume|cv\b/i.test(question);
+    const directEvidence = ranked.filter((item) => item.score > 0);
+    const usedFallback = !isSummary && directEvidence.length === 0;
+    const evidence = (isSummary || usedFallback ? ranked : directEvidence).slice(0, 6);
     const documentCitations: Citation[] = evidence.map((item, index) => ({
       sourceId: `S${index + 1}`,
       documentId: item.document.id,
@@ -102,6 +103,7 @@ export async function POST(request: Request) {
         documentCitations,
         webCitations,
         isSummary,
+        usedFallback,
         outputLanguage,
       ),
       citations: [...documentCitations.slice(0, 4), ...webCitations],
@@ -144,11 +146,55 @@ function tokenize(text: string) {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "how", "in", "is",
     "it", "of", "on", "or", "that", "the", "this", "to", "was", "were", "what", "when",
     "where", "which", "who", "why", "with",
+    "一个", "一下", "什么", "介绍", "关于", "可以", "如何", "是否", "这个", "这些", "那个",
   ]);
-  const words = (text.toLowerCase().match(/[\u3400-\u9fff]{2,}|[a-z0-9]{2,}/g) ?? [])
-    .filter((word) => !stopWords.has(word));
-  const chinese = text.match(/[\u3400-\u9fff]/g) ?? [];
-  return Array.from(new Set([...words, ...chinese])).slice(0, 40);
+  const normalized = text.toLowerCase();
+  const latin = normalized.match(/[a-z0-9][a-z0-9+'’.-]*/g) ?? [];
+  const chineseSequences = normalized.match(/[\u3400-\u9fff]+/g) ?? [];
+  const chineseBigrams = chineseSequences.flatMap((sequence) =>
+    Array.from({ length: Math.max(0, sequence.length - 1) }, (_value, index) =>
+      sequence.slice(index, index + 2),
+    ),
+  );
+  const expanded = expandQueryTerms(normalized);
+  return Array.from(new Set([...latin, ...chineseBigrams, ...expanded]))
+    .filter((word) => word.length > 1 && !stopWords.has(word))
+    .slice(0, 80);
+}
+
+function expandQueryTerms(text: string) {
+  const groups: Array<{ pattern: RegExp; terms: string[] }> = [
+    {
+      pattern: /工作|经历|经验|实习|任职|就业|职业|职位|work|experience|employment|job|role|intern|co-?op/i,
+      terms: ["experience", "employment", "work", "job", "role", "intern", "internship", "co-op", "engineer", "technician"],
+    },
+    {
+      pattern: /教育|学历|学校|大学|学院|专业|课程|education|school|university|college|degree|course/i,
+      terms: ["education", "university", "college", "school", "degree", "diploma", "course", "major"],
+    },
+    {
+      pattern: /技能|技术|工具|能力|擅长|软件|硬件|编程|skill|technical|tool|software|hardware|programming/i,
+      terms: ["skills", "technical", "technology", "tools", "software", "hardware", "programming", "proficient"],
+    },
+    {
+      pattern: /项目|作品|研究|设计|开发|制造|project|research|design|develop|build|built/i,
+      terms: ["project", "research", "design", "developed", "built", "created", "implemented"],
+    },
+    {
+      pattern: /成果|成就|奖项|贡献|影响|achievement|award|impact|result/i,
+      terms: ["achievement", "award", "result", "impact", "improved", "increased", "reduced"],
+    },
+    {
+      pattern: /简历|履历|候选人|个人|这个人|背景|介绍|resume|cv\b|profile|background|about/i,
+      terms: ["profile", "summary", "objective", "experience", "education", "skills", "projects"],
+    },
+    {
+      pattern: /适合|匹配|申请|岗位|招聘|求职|优势|资质|加拿大|fit|apply|position|qualification|candidate/i,
+      terms: ["qualification", "candidate", "experience", "education", "skills", "project", "co-op", "internship"],
+    },
+  ];
+
+  return groups.flatMap((group) => group.pattern.test(text) ? group.terms : []);
 }
 
 function splitIntoChunks(text: string) {
@@ -208,6 +254,7 @@ function buildExtractiveAnswer(
   documentCitations: Citation[],
   webCitations: Citation[],
   isSummary: boolean,
+  usedFallback: boolean,
   outputLanguage: "zh" | "en",
 ) {
   const citations = [...documentCitations, ...webCitations];
@@ -217,10 +264,14 @@ function buildExtractiveAnswer(
       : "当前资料不足，无法回答这个问题。";
   }
   const intro = outputLanguage === "en"
-    ? isSummary
+    ? usedFallback
+      ? "I could not find an exact keyword match. To avoid inventing an answer, here are the closest passages from the selected sources:"
+      : isSummary
       ? "Here are the most relevant findings extracted from the selected sources:"
       : `The following excerpts are most relevant to “${question.slice(0, 70)}”:`
-    : isSummary
+    : usedFallback
+      ? "资料中没有找到完全一致的关键词。为了避免编造，下面列出最接近的原文片段供你核对："
+      : isSummary
       ? "我从当前资料中提取出以下核心内容："
       : `根据当前资料，和“${question.slice(0, 48)}”最相关的内容如下：`;
   const documentBullets = documentCitations
@@ -238,10 +289,14 @@ function buildExtractiveAnswer(
   const note = outputLanguage === "en"
     ? webCitations.length
       ? "This free result uses extractive retrieval. Uploaded sources and public web results are labeled separately so you can verify each passage."
-      : "This free source-only result uses extractive retrieval. Every passage is quoted from your selected uploads."
+      : usedFallback
+        ? "This free source-only mode does not use the web. For a tighter match, include a job title, skill, school, or project name that appears in the source."
+        : "This free source-only result uses extractive retrieval. Every passage is quoted from your selected uploads."
     : webCitations.length
       ? "以上为免费的提取式检索结果；上传资料与公开网页来源已分别标注，便于逐条核对。"
-      : "以上为免费的严格资料检索结果；每段内容均直接摘自你选择的上传资料。";
+      : usedFallback
+        ? "这是免费的严格资料检索，不会联网。若想提高匹配度，可以在问题中加入资料里出现的职位、技能、学校或项目名称。"
+        : "以上为免费的严格资料检索结果；每段内容均直接摘自你选择的上传资料。";
   return [
     intro,
     documentBullets,

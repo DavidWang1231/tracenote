@@ -32,6 +32,10 @@ test("keeps source-only mode free and labels public web results", async () => {
   assert.match(askRoute, /sourceId: `W\$\{index \+ 1\}`/);
   assert.match(askRoute, /kind: "web" as const/);
   assert.match(askRoute, /value\.length > 8/);
+  assert.match(askRoute, /allDocuments\.filter\(\(document\) => selectedIds\.has\(document\.id\)\)/);
+  assert.match(askRoute, /expandQueryTerms/);
+  assert.match(askRoute, /为了避免编造，下面列出最接近的原文片段/);
+  assert.doesNotMatch(askRoute, /ranked\.filter\(\(item\) => item\.score > 0\)\)\.slice/);
 });
 
 test("ships Safari-compatible PDF.js assets", async () => {
