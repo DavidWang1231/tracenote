@@ -353,8 +353,9 @@ export default function Home() {
 
   function openSources() {
     setMobileSidebar(false);
-    setMobileSources(true);
-    window.setTimeout(() => sourceSearch.current?.focus(), 260);
+    const needsDrawer = window.matchMedia("(max-width: 1080px)").matches;
+    setMobileSources(needsDrawer);
+    window.setTimeout(() => sourceSearch.current?.focus(), needsDrawer ? 260 : 0);
   }
 
   function onDrop(event: DragEvent) {
@@ -409,7 +410,7 @@ export default function Home() {
             {t.workspace}
           </button>
           <button
-            className={`nav-item ${mobileSources ? "active" : ""}`}
+            className={`nav-item all-sources-nav ${mobileSources ? "active" : ""}`}
             onClick={openSources}
             aria-controls="source-library-panel"
             aria-expanded={mobileSources}
@@ -531,7 +532,7 @@ export default function Home() {
                     <div className="message-content">
                       {renderMessage(message, (citation) => {
                         setSelectedCitation(citation);
-                        setMobileSources(true);
+                        openSources();
                       })}
                     </div>
                     {!!message.citations?.length && (
@@ -541,7 +542,7 @@ export default function Home() {
                             key={`${message.id}-${citation.sourceId}`}
                             onClick={() => {
                               setSelectedCitation(citation);
-                              setMobileSources(true);
+                              openSources();
                             }}
                           >
                             <FileText size={13} /> {citation.sourceId} · {citation.documentName}

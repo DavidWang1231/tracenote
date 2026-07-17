@@ -72,6 +72,7 @@ button { color: inherit; }
   border: 0; background: transparent; border-radius: 9px; display: flex; align-items: center;
   gap: 10px; padding: 10px; color: #58665f; cursor: pointer; text-align: left;
 }
+.nav-item.all-sources-nav { display: none; }
 .nav-item.active { background: #e8ede9; color: var(--ink); font-weight: 650; }
 .nav-item span { margin-left: auto; color: #87928c; font-size: 12px; }
 .nav-item em { margin-left: auto; font-size: 10px; font-style: normal; padding: 3px 6px; background: #ebeeeb; border-radius: 20px; }
@@ -201,6 +202,7 @@ button { color: inherit; }
 }
 .icon-button { border: 0; background: transparent; padding: 6px; }
 .sources-backdrop {
+  display: none;
   position: fixed;
   z-index: 55;
   inset: 0;
@@ -210,18 +212,6 @@ button { color: inherit; }
   cursor: pointer;
   animation: backdrop-in .18s ease-out;
 }
-.sources-panel.mobile-open {
-  position: fixed;
-  z-index: 60;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: min(92vw, 400px);
-  transform: translateX(0);
-  box-shadow: -18px 0 48px rgba(28, 44, 35, .2);
-  animation: sources-drawer-in .22s ease-out;
-}
-.sources-panel.mobile-open .mobile-close { display: grid; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes backdrop-in { from { opacity: 0; } }
@@ -233,8 +223,10 @@ button { color: inherit; }
 
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 220px minmax(480px, 1fr); }
-  .sources-panel { position: fixed; z-index: 40; top: 0; bottom: 0; right: 0; width: 340px; transform: translateX(101%); transition: transform .25s ease; box-shadow: -15px 0 40px rgba(28,44,35,.14); }
-  .sources-panel.mobile-open { transform: translateX(0); }
+  .nav-item.all-sources-nav { display: flex; }
+  .sources-backdrop { display: block; }
+  .sources-panel { position: fixed; z-index: 60; top: 0; bottom: 0; right: 0; width: 340px; transform: translateX(101%); transition: transform .25s ease; box-shadow: -15px 0 40px rgba(28,44,35,.14); }
+  .sources-panel.mobile-open { transform: translateX(0); animation: sources-drawer-in .22s ease-out; }
   .sources-panel .mobile-close { display: grid; }
 }
 
