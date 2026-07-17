@@ -190,9 +190,46 @@ button { color: inherit; }
 .scope-note { margin-top: auto; border-top: 1px solid var(--line); padding: 15px 2px 0; color: #78877f; display: flex; gap: 7px; font-size: 9px; line-height: 1.5; }
 
 .mobile-header, .mobile-close { display: none; }
+.mobile-close {
+  width: 31px;
+  height: 31px;
+  border: 0;
+  background: #edf0ed;
+  border-radius: 8px;
+  place-items: center;
+  cursor: pointer;
+}
 .icon-button { border: 0; background: transparent; padding: 6px; }
+.sources-backdrop {
+  position: fixed;
+  z-index: 55;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: rgba(18, 30, 24, .32);
+  cursor: pointer;
+  animation: backdrop-in .18s ease-out;
+}
+.sources-panel.mobile-open {
+  position: fixed;
+  z-index: 60;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(92vw, 400px);
+  transform: translateX(0);
+  box-shadow: -18px 0 48px rgba(28, 44, 35, .2);
+  animation: sources-drawer-in .22s ease-out;
+}
+.sources-panel.mobile-open .mobile-close { display: grid; }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+@keyframes backdrop-in { from { opacity: 0; } }
+@keyframes sources-drawer-in { from { transform: translateX(20px); opacity: .75; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .sources-backdrop, .sources-panel.mobile-open { animation: none; }
+}
 
 @media (max-width: 1080px) {
   .app-shell { grid-template-columns: 220px minmax(480px, 1fr); }
@@ -206,7 +243,6 @@ button { color: inherit; }
   .mobile-header { position: fixed; z-index: 30; inset: 0 0 auto; height: 58px; padding: 0 13px; background: rgba(250,251,249,.95); border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
   .sidebar { position: fixed; z-index: 50; inset: 0 auto 0 0; width: 260px; transform: translateX(-101%); transition: transform .25s ease; box-shadow: 15px 0 40px rgba(28,44,35,.14); }
   .sidebar.mobile-open { transform: translateX(0); }
-  .mobile-close { width: 31px; height: 31px; border: 0; background: #edf0ed; border-radius: 8px; place-items: center; cursor: pointer; }
   .sidebar .mobile-close { display: grid; }
   .workspace { height: calc(100dvh - 58px); }
   .workspace-header { height: 70px; flex-basis: 70px; padding: 15px 17px; }

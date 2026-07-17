@@ -193,6 +193,17 @@ export default function Home() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!mobileSources) return;
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileSources(false);
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileSources]);
+
   function changeUiLanguage(language: UiLanguage) {
     setUiLanguage(language);
     window.localStorage.setItem("tracenote-ui-language", language);
@@ -368,7 +379,13 @@ export default function Home() {
           <Menu size={19} />
         </button>
         <Brand compact language={uiLanguage} />
-        <button className="icon-button" onClick={() => setMobileSources(true)} aria-label={t.viewSources}>
+        <button
+          className="icon-button"
+          onClick={openSources}
+          aria-label={t.viewSources}
+          aria-controls="source-library-panel"
+          aria-expanded={mobileSources}
+        >
           <BookOpen size={19} />
         </button>
       </header>
@@ -391,7 +408,13 @@ export default function Home() {
             <MessageSquareText size={17} />
             {t.workspace}
           </button>
-          <button className="nav-item" onClick={openSources}>
+          <button
+            className={`nav-item ${mobileSources ? "active" : ""}`}
+            onClick={openSources}
+            aria-controls="source-library-panel"
+            aria-expanded={mobileSources}
+            data-testid="open-source-library"
+          >
             <Library size={17} />
             {t.allSources}
             <span>{documents.length}</span>
@@ -555,7 +578,13 @@ export default function Home() {
               rows={2}
             />
             <div className="composer-footer">
-              <button type="button" className="context-button" onClick={openSources}>
+              <button
+                type="button"
+                className="context-button"
+                onClick={openSources}
+                aria-controls="source-library-panel"
+                aria-expanded={mobileSources}
+              >
                 <FileText size={14} /> {t.selectedSources(selectedIds.length)}
               </button>
               <label className="answer-language-select">
@@ -577,7 +606,22 @@ export default function Home() {
         {dragging && <div className="drop-overlay"><Upload size={28} /> {t.drop}</div>}
       </section>
 
-      <aside className={`sources-panel ${mobileSources ? "mobile-open" : ""}`}>
+      {mobileSources && (
+        <button
+          type="button"
+          className="sources-backdrop"
+          onClick={() => setMobileSources(false)}
+          aria-label={t.close}
+          data-testid="source-library-backdrop"
+        />
+      )}
+
+      <aside
+        id="source-library-panel"
+        className={`sources-panel ${mobileSources ? "mobile-open" : ""}`}
+        aria-label={t.sourcesAndCitations}
+        data-testid="source-library-panel"
+      >
         <div className="sources-header">
           <div>
             <p className="eyebrow">{t.sourcesAndCitations}</p>
