@@ -13,7 +13,7 @@ AI research tools are fast, but a polished answer is not useful when the support
 - use only the sources selected by the user;
 - surface the exact excerpt behind each citation;
 - state when the available evidence is insufficient;
-- support English and Chinese research without quietly adding web content.
+- support English and Chinese research while keeping optional public web content clearly labeled.
 
 ## Product features
 
@@ -21,7 +21,8 @@ AI research tools are fast, but a polished answer is not useful when the support
 - persistent document storage with metadata
 - single-document summaries and cross-document questions
 - inline citation tags with an evidence inspector
-- source-only mode with web search disabled by default
+- free source-only mode that requires no model credits
+- optional English and Chinese Wikipedia supplementation with separate `[W1]` citations
 - English and Chinese interface switching
 - automatic, English, or Chinese answer language
 - responsive desktop and mobile layouts
@@ -35,15 +36,16 @@ Browser document parser
 R2 original file storage + D1 source text/metadata
         ↓
 Relevant excerpt ranking
+        ├──────────────→ Wikipedia REST API (optional public supplement)
         ↓
-OpenAI Responses API (optional)
+OpenAI Responses API (optional intelligent synthesis)
         ↓
-Answer with [S1] citation tags
+Answer with [S1] upload and [W1] web citation tags
         ↓
 Evidence inspector showing the supporting excerpt
 ```
 
-The application uses a server-side model key when available. Without one, the same evidence pipeline returns an extractive, citation-backed response so the core workflow remains testable.
+The application uses a server-side model key when available. Without one, the same evidence pipeline returns an extractive, citation-backed response. Source-only retrieval and the labeled Wikipedia supplement both work without AI credits.
 
 ## Tech stack
 
@@ -79,6 +81,7 @@ npm run build
 - The private workspace is deployed separately from the public demo.
 - Uploaded file bytes and searchable metadata use separate storage bindings.
 - Source-only prompts explicitly prohibit outside knowledge and invented citations.
+- Public-source mode sends the question to Wikipedia for search, but never sends uploaded files.
 
 ## Repository structure
 

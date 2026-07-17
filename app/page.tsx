@@ -5,10 +5,11 @@ import {
   BookOpen,
   Check,
   ChevronDown,
-  File,
+  File as FileIcon,
   FileText,
   FolderOpen,
   Globe2,
+  ExternalLink,
   Library,
   Languages,
   LoaderCircle,
@@ -40,6 +41,9 @@ type Citation = {
   documentId: string;
   documentName: string;
   excerpt: string;
+  kind?: "document" | "web";
+  url?: string;
+  sourceLabel?: string;
 };
 
 type ChatMessage = {
@@ -48,10 +52,12 @@ type ChatMessage = {
   content: string;
   citations?: Citation[];
   mode?: "ai" | "extractive";
+  webSupplement?: boolean;
 };
 
 type UiLanguage = "zh" | "en";
 type AnswerLanguage = "auto" | "zh" | "en";
+type ResearchScope = "sources" | "web";
 
 type PdfJsLibrary = {
   version: string;
@@ -85,19 +91,26 @@ const COPY = {
   zh: {
     openLibrary: "打开资料库", viewSources: "查看来源", close: "关闭",
     newProject: "新建研究项目", workspace: "研究工作区", allSources: "全部资料",
-    webSupplement: "联网补充", off: "关闭", currentProject: "当前项目",
+    webSupplement: "公开资料补充", off: "关闭", on: "开启", currentProject: "当前项目",
     projectName: "我的研究资料", noSources: "尚未添加资料", sourceCount: (n: number) => `${n} 份资料`,
-    strictMode: "严格资料模式", strictHint: "仅依据你选择的资料回答",
+    strictMode: "严格资料模式", strictHint: "免费 · 仅依据所选资料回答",
+    scopeLabel: "回答范围", sourceOnly: "仅上传资料", sourceOnlyHint: "免费检索、摘要与原文引用，不使用外部信息",
+    publicWeb: "资料 + Wikipedia", publicWebHint: "免费补充中英文 Wikipedia；不会发送上传文件",
+    sourceScopeEnabled: "已切换到严格资料模式，只使用你选择的资料。",
+    webScopeEnabled: "已开启公开资料补充。提问时会把问题内容发送给 Wikipedia 检索，但不会发送上传文件。",
     addSources: "添加资料", loadingLibrary: "正在打开资料库…", sourcesReady: "资料已就绪",
     readyCopy: (selected: number, words: string) => `当前选中 ${selected} 份资料，共约 ${words} 字。我只会依据这些资料回答，并在每个关键结论后标记来源。`,
+    webReadyCopy: (selected: number, words: string) => `当前选中 ${selected} 份资料，共约 ${words} 字。回答会优先引用上传资料，并明确区分 Wikipedia 补充来源。`,
     suggestions: ["总结所有资料的核心观点", "找出资料之间的矛盾", "提取关键数据与时间线"],
-    you: "你", assistant: "溯源助手", aiAnalysis: "AI 综合分析", localSummary: "本地提取摘要",
+    you: "你", assistant: "溯源助手", aiAnalysis: "AI 综合分析", localSummary: "资料检索",
     checking: "正在核对资料与引用…", askPlaceholder: "针对所选资料提问…", selectedSources: (n: number) => `${n} 份资料`,
     newline: "Shift + Enter 换行", sourcesAndCitations: "资料与引用", sourceCheck: "来源检查",
     searchSources: "搜索资料", projectSources: "本项目资料", selectedRatio: (a: number, b: number) => `${a}/${b} 已选择`,
     currentCitation: "当前引用", citationProof: "此回答依据上方原文片段生成",
     citationEmptyTitle: "引用会显示在这里", citationEmptyCopy: "提出问题后，点击回答中的来源编号即可检查原文。",
-    offlineNote: "联网搜索已关闭。系统不会把外部信息混入当前研究。",
+    offlineNote: "严格资料模式已开启：答案只检索所选资料，不消耗 AI 额度。",
+    onlineNote: "公开资料补充已开启：问题内容会发送到中英文 Wikipedia 检索，上传文件不会发送。",
+    publicSourceSearch: "公开资料检索", openWebSource: "打开 Wikipedia 原文",
     emptyEyebrow: "从你的资料开始", emptyTitle: "把散落的信息，变成可追溯的结论",
     emptyCopy: "上传资料后，我可以总结重点、对比多份文件，并让每个结论都回到原文。",
     upload: "选择资料上传", uploading: "正在处理资料", examples: "或使用示例资料体验",
@@ -114,19 +127,26 @@ const COPY = {
   en: {
     openLibrary: "Open library", viewSources: "View sources", close: "Close",
     newProject: "New research project", workspace: "Research workspace", allSources: "All sources",
-    webSupplement: "Web supplement", off: "Off", currentProject: "Current project",
+    webSupplement: "Public web sources", off: "Off", on: "On", currentProject: "Current project",
     projectName: "My research library", noSources: "No sources yet", sourceCount: (n: number) => `${n} source${n === 1 ? "" : "s"}`,
-    strictMode: "Source-only mode", strictHint: "Answers only from selected sources",
+    strictMode: "Source-only mode", strictHint: "Free · selected sources only",
+    scopeLabel: "Answer scope", sourceOnly: "Uploaded sources only", sourceOnlyHint: "Free retrieval, summaries, and citations with no external information",
+    publicWeb: "Sources + Wikipedia", publicWebHint: "Free English and Chinese Wikipedia results; uploaded files are never sent",
+    sourceScopeEnabled: "Source-only mode is on. Answers will use only your selected documents.",
+    webScopeEnabled: "Public web sources are on. Your question is sent to Wikipedia for search; uploaded files are not sent.",
     addSources: "Add sources", loadingLibrary: "Opening your library…", sourcesReady: "Your sources are ready",
     readyCopy: (selected: number, words: string) => `${selected} source${selected === 1 ? " is" : "s are"} selected, with about ${words} words. Every factual claim will point back to the source material.`,
+    webReadyCopy: (selected: number, words: string) => `${selected} source${selected === 1 ? " is" : "s are"} selected, with about ${words} words. Answers prioritize uploads and clearly separate supplemental Wikipedia results.`,
     suggestions: ["Summarize the core findings", "Find contradictions across sources", "Extract key data and a timeline"],
-    you: "You", assistant: "TraceNote", aiAnalysis: "AI synthesis", localSummary: "Extractive summary",
+    you: "You", assistant: "TraceNote", aiAnalysis: "AI synthesis", localSummary: "Evidence retrieval",
     checking: "Checking evidence and citations…", askPlaceholder: "Ask a question about the selected sources…", selectedSources: (n: number) => `${n} source${n === 1 ? "" : "s"}`,
     newline: "Shift + Enter for a new line", sourcesAndCitations: "Sources & citations", sourceCheck: "Evidence inspector",
     searchSources: "Search sources", projectSources: "Project sources", selectedRatio: (a: number, b: number) => `${a}/${b} selected`,
     currentCitation: "Current citation", citationProof: "This answer is grounded in the excerpt above",
     citationEmptyTitle: "Citations will appear here", citationEmptyCopy: "Ask a question, then select a source tag to inspect the supporting excerpt.",
-    offlineNote: "Web search is off. External information will not be mixed into this research.",
+    offlineNote: "Source-only mode is on: answers search selected documents without using AI credits.",
+    onlineNote: "Public web sources are on: your question goes to English and Chinese Wikipedia for search; uploads are not sent.",
+    publicSourceSearch: "Public source search", openWebSource: "Open the Wikipedia article",
     emptyEyebrow: "Start with your sources", emptyTitle: "Turn scattered documents into verifiable insight",
     emptyCopy: "Upload your material to summarize key points, compare sources, and trace every conclusion back to the original.",
     upload: "Choose files", uploading: "Processing sources", examples: "Or explore with sample sources",
@@ -167,6 +187,8 @@ const EXAMPLE_FILES_EN = [
 export default function Home() {
   const [uiLanguage, setUiLanguage] = useState<UiLanguage>("zh");
   const [answerLanguage, setAnswerLanguage] = useState<AnswerLanguage>("auto");
+  const [researchScope, setResearchScope] = useState<ResearchScope>("sources");
+  const [scopeMenuOpen, setScopeMenuOpen] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [question, setQuestion] = useState("");
@@ -185,24 +207,37 @@ export default function Home() {
 
   useEffect(() => {
     void loadDocuments();
-    const savedUi = window.localStorage.getItem("tracenote-ui-language");
-    const savedAnswer = window.localStorage.getItem("tracenote-answer-language");
-    if (savedUi === "zh" || savedUi === "en") setUiLanguage(savedUi);
-    if (savedAnswer === "auto" || savedAnswer === "zh" || savedAnswer === "en") {
-      setAnswerLanguage(savedAnswer);
-    }
+    // The library is loaded once on startup; language changes do not require a refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!mobileSources) return;
+    const savedUi = window.localStorage.getItem("tracenote-ui-language");
+    const savedAnswer = window.localStorage.getItem("tracenote-answer-language");
+    const savedScope = window.localStorage.getItem("tracenote-research-scope");
+    const restorePreferences = window.setTimeout(() => {
+      if (savedUi === "zh" || savedUi === "en") setUiLanguage(savedUi);
+      if (savedAnswer === "auto" || savedAnswer === "zh" || savedAnswer === "en") {
+        setAnswerLanguage(savedAnswer);
+      }
+      if (savedScope === "sources" || savedScope === "web") setResearchScope(savedScope);
+    }, 0);
+    return () => window.clearTimeout(restorePreferences);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileSources && !scopeMenuOpen) return;
 
     function closeOnEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setMobileSources(false);
+      if (event.key === "Escape") {
+        setMobileSources(false);
+        setScopeMenuOpen(false);
+      }
     }
 
     window.addEventListener("keydown", closeOnEscape);
     return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [mobileSources]);
+  }, [mobileSources, scopeMenuOpen]);
 
   function changeUiLanguage(language: UiLanguage) {
     setUiLanguage(language);
@@ -213,6 +248,13 @@ export default function Home() {
   function changeAnswerLanguage(language: AnswerLanguage) {
     setAnswerLanguage(language);
     window.localStorage.setItem("tracenote-answer-language", language);
+  }
+
+  function changeResearchScope(scope: ResearchScope) {
+    setResearchScope(scope);
+    setScopeMenuOpen(false);
+    setNotice(scope === "sources" ? t.sourceScopeEnabled : t.webScopeEnabled);
+    window.localStorage.setItem("tracenote-research-scope", scope);
   }
 
   async function loadDocuments() {
@@ -321,12 +363,14 @@ export default function Home() {
           mode,
           answerLanguage,
           interfaceLanguage: uiLanguage,
+          webSupplement: researchScope === "web",
         }),
       });
       const data = (await response.json()) as {
         answer?: string;
         citations?: Citation[];
         mode?: "ai" | "extractive";
+        webSupplement?: boolean;
         error?: string;
       };
       if (!response.ok || !data.answer) throw new Error(data.error || t.analyzeFail);
@@ -336,6 +380,7 @@ export default function Home() {
         content: data.answer,
         citations: data.citations ?? [],
         mode: data.mode,
+        webSupplement: data.webSupplement,
       };
       setMessages((current) => [...current, assistantMessage]);
       if (data.citations?.[0]) setSelectedCitation(data.citations[0]);
@@ -420,10 +465,14 @@ export default function Home() {
             {t.allSources}
             <span>{documents.length}</span>
           </button>
-          <button className="nav-item">
+          <button
+            className={`nav-item ${researchScope === "web" ? "active" : ""}`}
+            onClick={() => changeResearchScope(researchScope === "web" ? "sources" : "web")}
+            aria-pressed={researchScope === "web"}
+          >
             <Globe2 size={17} />
             {t.webSupplement}
-            <em>{t.off}</em>
+            <em>{researchScope === "web" ? t.on : t.off}</em>
           </button>
         </nav>
 
@@ -439,14 +488,19 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="privacy-card">
+        <button
+          type="button"
+          className={`privacy-card ${researchScope === "sources" ? "active" : ""}`}
+          onClick={() => changeResearchScope("sources")}
+          aria-pressed={researchScope === "sources"}
+        >
           <ShieldCheck size={18} />
           <div>
             <strong>{t.strictMode}</strong>
             <span>{t.strictHint}</span>
           </div>
-          <div className="status-dot" aria-label={t.enabled} />
-        </div>
+          <div className={`status-dot ${researchScope === "sources" ? "" : "off"}`} aria-label={researchScope === "sources" ? t.enabled : t.off} />
+        </button>
       </aside>
 
       <section
@@ -464,7 +518,45 @@ export default function Home() {
             <h1>{t.projectName}</h1>
           </div>
           <div className="workspace-actions">
-            <div className="mode-pill"><ShieldCheck size={15} /> {t.strictMode} <ChevronDown size={14} /></div>
+            <div className="scope-control">
+              <button
+                type="button"
+                className="mode-pill"
+                onClick={() => setScopeMenuOpen((current) => !current)}
+                aria-expanded={scopeMenuOpen}
+                aria-haspopup="listbox"
+              >
+                {researchScope === "sources" ? <ShieldCheck size={15} /> : <Globe2 size={15} />}
+                {researchScope === "sources" ? t.sourceOnly : t.publicWeb}
+                <ChevronDown size={14} />
+              </button>
+              {scopeMenuOpen && (
+                <div className="scope-menu" role="listbox" aria-label={t.scopeLabel}>
+                  <button
+                    type="button"
+                    className={researchScope === "sources" ? "selected" : ""}
+                    onClick={() => changeResearchScope("sources")}
+                    role="option"
+                    aria-selected={researchScope === "sources"}
+                  >
+                    <ShieldCheck size={17} />
+                    <span><strong>{t.sourceOnly}</strong><small>{t.sourceOnlyHint}</small></span>
+                    {researchScope === "sources" && <Check size={15} />}
+                  </button>
+                  <button
+                    type="button"
+                    className={researchScope === "web" ? "selected" : ""}
+                    onClick={() => changeResearchScope("web")}
+                    role="option"
+                    aria-selected={researchScope === "web"}
+                  >
+                    <Globe2 size={17} />
+                    <span><strong>{t.publicWeb}</strong><small>{t.publicWebHint}</small></span>
+                    {researchScope === "web" && <Check size={15} />}
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="language-switch" aria-label={t.interfaceLanguage}>
               <Languages size={15} />
               <button className={uiLanguage === "zh" ? "active" : ""} onClick={() => changeUiLanguage("zh")}>中</button>
@@ -509,7 +601,9 @@ export default function Home() {
                 <div>
                   <h2>{t.sourcesReady}</h2>
                   <p>
-                    {t.readyCopy(selectedDocuments.length, formatNumber(totalWords, uiLanguage))}
+                    {researchScope === "sources"
+                      ? t.readyCopy(selectedDocuments.length, formatNumber(totalWords, uiLanguage))
+                      : t.webReadyCopy(selectedDocuments.length, formatNumber(totalWords, uiLanguage))}
                   </p>
                   <div className="suggestion-row">
                     {t.suggestions.map((item) => (
@@ -528,6 +622,7 @@ export default function Home() {
                       {message.mode && (
                         <span>{message.mode === "ai" ? t.aiAnalysis : t.localSummary}</span>
                       )}
+                      {message.webSupplement && <span>{t.publicSourceSearch}</span>}
                     </div>
                     <div className="message-content">
                       {renderMessage(message, (citation) => {
@@ -545,7 +640,8 @@ export default function Home() {
                               openSources();
                             }}
                           >
-                            <FileText size={13} /> {citation.sourceId} · {citation.documentName}
+                            {citation.kind === "web" ? <Globe2 size={13} /> : <FileText size={13} />}
+                            {citation.sourceId} · {citation.documentName}
                           </button>
                         ))}
                       </div>
@@ -657,7 +753,7 @@ export default function Home() {
                 >
                   {selected && <Check size={12} />}
                 </button>
-                <div className="file-icon"><File size={16} /></div>
+                <div className="file-icon"><FileIcon size={16} /></div>
                 <div className="document-info">
                   <strong title={document.name}>{document.name}</strong>
                   <span>{formatFileSize(document.size)} · {formatNumber(document.wordCount, uiLanguage)} {uiLanguage === "zh" ? "字" : "words"}</span>
@@ -676,7 +772,13 @@ export default function Home() {
               <div className="citation-label"><span>{selectedCitation.sourceId}</span> {t.currentCitation}</div>
               <h3>{selectedCitation.documentName}</h3>
               <blockquote>{selectedCitation.excerpt}</blockquote>
-              <p><ShieldCheck size={14} /> {t.citationProof}</p>
+              {selectedCitation.kind === "web" && selectedCitation.url ? (
+                <a className="citation-link" href={selectedCitation.url} target="_blank" rel="noreferrer">
+                  <ExternalLink size={13} /> {t.openWebSource}
+                </a>
+              ) : (
+                <p><ShieldCheck size={14} /> {t.citationProof}</p>
+              )}
             </>
           ) : (
             <div className="citation-empty">
@@ -688,8 +790,8 @@ export default function Home() {
         </div>
 
         <div className="scope-note">
-          <ShieldCheck size={15} />
-          <span>{t.offlineNote}</span>
+          {researchScope === "sources" ? <ShieldCheck size={15} /> : <Globe2 size={15} />}
+          <span>{researchScope === "sources" ? t.offlineNote : t.onlineNote}</span>
         </div>
       </aside>
     </main>
@@ -748,8 +850,8 @@ function renderMessage(message: ChatMessage, onCitation: (citation: Citation) =>
   const citations = new Map((message.citations ?? []).map((item) => [item.sourceId, item]));
   return message.content.split("\n").map((line, lineIndex) => (
     <p key={`${message.id}-${lineIndex}`}>
-      {line.split(/(\[S\d+\])/g).map((part, partIndex) => {
-        const id = part.match(/^\[(S\d+)\]$/)?.[1];
+      {line.split(/(\[(?:S|W)\d+\])/g).map((part, partIndex) => {
+        const id = part.match(/^\[((?:S|W)\d+)\]$/)?.[1];
         const citation = id ? citations.get(id) : undefined;
         return citation ? (
           <button className="inline-citation" key={`${part}-${partIndex}`} onClick={() => onCitation(citation)}>
